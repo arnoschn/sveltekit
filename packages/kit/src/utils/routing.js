@@ -1,4 +1,4 @@
-const param_pattern = /^(\[)?(\.\.\.)?(\w+)(?:=(\w+))?(\])?$/;
+const param_pattern = /^(\[)?(\.\.\.)?(\w+)(?:=(\w+))?(?:=([\w,\-]+))?(\])?$/;
 
 /**
  * Creates the regex pattern, extracts parameter names, and generates types for a route
@@ -20,6 +20,7 @@ export function parse_route_id(id) {
 								params.push({
 									name: rest_match[1],
 									matcher: rest_match[2],
+									
 									optional: false,
 									rest: true,
 									chained: true
@@ -27,11 +28,12 @@ export function parse_route_id(id) {
 								return '(?:/(.*))?';
 							}
 							// special case — /[[optional]]/ could contain zero segments
-							const optional_match = /^\[\[(\w+)(?:=(\w+))?\]\]$/.exec(segment);
+							const optional_match = /^\[\[(\w+)(?:=(\w+))?(?:=(\w+))?\]\]$/.exec(segment);
 							if (optional_match) {
 								params.push({
 									name: optional_match[1],
 									matcher: optional_match[2],
+									default:optional_match[3],
 									optional: true,
 									rest: false,
 									chained: true
@@ -69,18 +71,22 @@ export function parse_route_id(id) {
 											);
 										}
 
-										const [, is_optional, is_rest, name, matcher] = match;
+										const [, is_optional, is_rest, name, matcher,switchParams] = match;
 										// It's assumed that the following invalid route id cases are already checked
 										// - unbalanced brackets
 										// - optional param following rest param
-
+										
 										params.push({
 											name,
 											matcher,
 											optional: !!is_optional,
+											default:!!is_optional?switchParams:undefined,
 											rest: !!is_rest,
 											chained: is_rest ? i === 1 && parts[0] === '' : false
 										});
+										if(switchParams && !is_optional) {
+											return "("+switchParams.replace(",","|")+")"+(is_optional?"?":"");
+										}
 										return is_rest ? '(.*?)' : is_optional ? '([^/]*)?' : '([^/]+?)';
 									}
 
@@ -147,10 +153,11 @@ export function exec(match, params, matchers) {
 		// if `value` is undefined, it means this is an optional or rest parameter
 		if (value === undefined) {
 			if (param.rest) result[param.name] = '';
+			if(param.optional && param.default) result[param.name]=param.default;
 			continue;
 		}
-
-		if (!param.matcher || matchers[param.matcher](value)) {
+		
+		if (!param.matcher || matchers[param.matcher](value,result)) {
 			result[param.name] = value;
 
 			// Now that the params match, reset the buffer if the next param isn't the [...rest]
@@ -161,6 +168,8 @@ export function exec(match, params, matchers) {
 				buffered = 0;
 			}
 			continue;
+		} else if( param.default) {
+			result[param.name] = param.default;
 		}
 
 		// in the `/[[a=b]]/...` case, if the value didn't satisfy the matcher,

@@ -161,6 +161,7 @@ export interface RouteParam {
 	name: string;
 	matcher: string;
 	optional: boolean;
+	default?:string;
 	rest: boolean;
 	chained: boolean;
 }

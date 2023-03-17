@@ -907,7 +907,7 @@ export interface Page<
  * The shape of a param matcher. See [matching](https://kit.svelte.dev/docs/advanced-routing#matching) for more info.
  */
 export interface ParamMatcher {
-	(param: string): boolean;
+	(param: string, params:object): boolean;
 }
 
 export interface RequestEvent<
