@@ -87,7 +87,7 @@ export interface Builder {
 	config: ValidatedConfig;
 	/** Information about prerendered pages and assets, if any. */
 	prerendered: Prerendered;
-	/** An array of dynamic (not prerendered) routes */
+	/** An array of all routes (including prerendered) */
 	routes: RouteDefinition[];
 
 	/**
@@ -1264,6 +1264,7 @@ export interface SubmitFunction<
 		data: FormData;
 		form: HTMLFormElement;
 		controller: AbortController;
+		submitter: HTMLElement | null;
 		cancel(): void;
 	}): MaybePromise<
 		| void
