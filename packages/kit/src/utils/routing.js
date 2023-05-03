@@ -85,7 +85,7 @@ export function parse_route_id(id) {
 											chained: is_rest ? i === 1 && parts[0] === '' : false
 										});
 										if(switchParams && !is_optional) {
-											return "("+switchParams.replace(",","|")+")"+(is_optional?"?":"");
+											return "("+switchParams.replace(/,/g,"|")+")"+(is_optional?"?":"");
 										}
 										return is_rest ? '(.*?)' : is_optional ? '([^/]*)?' : '([^/]+?)';
 									}
