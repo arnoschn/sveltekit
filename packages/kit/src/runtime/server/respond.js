@@ -26,6 +26,7 @@ import {
 } from '../../utils/exports.js';
 import { get_option } from '../../utils/options.js';
 import { error, json, text } from '../../exports/index.js';
+import { action_json_redirect, is_action_json_request } from './page/actions.js';
 
 /* global __SVELTEKIT_ADAPTER_NAME__ */
 
@@ -51,9 +52,12 @@ export async function respond(request, options, manifest, state) {
 
 	if (options.csrf_check_origin) {
 		const forbidden =
-			request.method === 'POST' &&
-			request.headers.get('origin') !== url.origin &&
-			is_form_content_type(request);
+			is_form_content_type(request) &&
+			(request.method === 'POST' ||
+				request.method === 'PUT' ||
+				request.method === 'PATCH' ||
+				request.method === 'DELETE') &&
+			request.headers.get('origin') !== url.origin;
 
 		if (forbidden) {
 			const csrf_error = error(403, `Cross-site ${request.method} form submissions are forbidden`);
@@ -171,8 +175,12 @@ export async function respond(request, options, manifest, state) {
 
 	try {
 		// determine whether we need to redirect to add/remove a trailing slash
-		if (route && !is_data_request) {
-			if (route.page) {
+		if (route) {
+			// if `paths.base === '/a/b/c`, then the root route is `/a/b/c/`,
+			// regardless of the `trailingSlash` route option
+			if (url.pathname === base || url.pathname === base + '/') {
+				trailing_slash = 'always';
+			} else if (route.page) {
 				const nodes = await Promise.all([
 					// we use == here rather than === because [undefined] serializes as "[null]"
 					...route.page.layouts.map((n) => (n == undefined ? n : manifest._.nodes[n]())),
@@ -209,19 +217,21 @@ export async function respond(request, options, manifest, state) {
 				}
 			}
 
-			const normalized = normalize_path(url.pathname, trailing_slash ?? 'never');
+			if (!is_data_request) {
+				const normalized = normalize_path(url.pathname, trailing_slash ?? 'never');
 
-			if (normalized !== url.pathname && !state.prerendering?.fallback) {
-				return new Response(undefined, {
-					status: 308,
-					headers: {
-						'x-sveltekit-normalize': '1',
-						location:
-							// ensure paths starting with '//' are not treated as protocol-relative
-							(normalized.startsWith('//') ? url.origin + normalized : normalized) +
-							(url.search === '?' ? '' : url.search)
-					}
-				});
+				if (normalized !== url.pathname && !state.prerendering?.fallback) {
+					return new Response(undefined, {
+						status: 308,
+						headers: {
+							'x-sveltekit-normalize': '1',
+							location:
+								// ensure paths starting with '//' are not treated as protocol-relative
+								(normalized.startsWith('//') ? url.origin + normalized : normalized) +
+								(url.search === '?' ? '' : url.search)
+						}
+					});
+				}
 			}
 		}
 
@@ -306,6 +316,8 @@ export async function respond(request, options, manifest, state) {
 		if (e instanceof Redirect) {
 			const response = is_data_request
 				? redirect_json_response(e)
+				: route?.page && is_action_json_request(event)
+				? action_json_redirect(e)
 				: redirect_response(e.status, e.location);
 			add_cookies_to_headers(response.headers, Object.values(cookies_to_add));
 			return response;
